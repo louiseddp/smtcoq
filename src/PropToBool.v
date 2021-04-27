@@ -26,7 +26,11 @@ Ltac prop2bool :=
     match goal with
     | [ |- forall _ : ?t, _ ] =>
       lazymatch type of t with
-      | Prop => fail
+      | Prop =>
+        match t with
+        | forall _ : _, _ => intro
+        | _ => fail
+        end
       | _ => intro
       end
 
@@ -38,12 +42,16 @@ Ltac prop2bool :=
     | [ |- context[ Z.ge _ _ ] ] => rewrite <- geb_ge
     | [ |- context[ Z.eq _ _ ] ] => rewrite <- Z.eqb_eq
 
-    | [ |- context[ @Logic.eq ?t _ _ ] ] =>
+    | [ |- context[ @Logic.eq ?t ?x ?y ] ] =>
       lazymatch t with
       | bitvector _ => rewrite <- bv_eq_reflect
       | farray _ _ => rewrite <- equal_iff_eq
       | Z => rewrite <- Z.eqb_eq
-      | bool => fail
+      | bool =>
+        lazymatch y with
+        | true => fail
+        | _ => rewrite <- eqb_true_iff
+        end
       | _ =>
         lazymatch goal with
         | [ p: (CompDec t) |- _ ] =>
@@ -102,6 +110,8 @@ Ltac bool2prop_true :=
     | [ |- context[ Z.leb _ _ = true ] ] => rewrite Z.leb_le
     | [ |- context[ Z.geb _ _ ] ] => rewrite geb_ge
     | [ |- context[ Z.eqb _ _ = true ] ] => rewrite Z.eqb_eq
+
+    |  [ |- context[ Bool.eqb _ _ = true ] ] => rewrite eqb_true_iff
 
     | [ |- context[ eqb_of_compdec ?p _ _ = true ] ] => rewrite <- (@compdec_eq_eqb _ p)
 
@@ -197,7 +207,7 @@ Ltac prop2bool_hyp H :=
     [ bool2prop; apply H | ];
 
     (* Replace the Prop version with the bool version *)
-    clear H; assert (H:=H'); clear H'
+    try clear H; let H := fresh H in assert (H:=H'); clear H'
   ].
 
 Ltac prop2bool_hyps Hs :=
@@ -214,17 +224,22 @@ Section Test.
   Hypothesis basic : forall (l1 l2:list A), length (l1++l2) = (length l1 + length l2)%nat.
   Hypothesis no_eq : forall (z1 z2:Z), (z1 < z2)%Z.
   Hypothesis uninterpreted_type : forall (a:A), a = a.
+  Hypothesis bool_eq : forall (b:bool), negb (negb b) = b.
 
   Goal True.
   Proof.
     prop2bool_hyp basic.
     prop2bool_hyp no_eq.
     prop2bool_hyp uninterpreted_type.
+    admit.
+    prop2bool_hyp bool_eq.
+    prop2bool_hyp plus_n_O.
   Abort.
 
   Goal True.
   Proof.
-    prop2bool_hyps (basic, no_eq, uninterpreted_type).
+    prop2bool_hyps (basic, plus_n_O, no_eq, uninterpreted_type, bool_eq, plus_O_n).
+    admit.
   Abort.
 End Test.
 
